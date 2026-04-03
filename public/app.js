@@ -20,6 +20,7 @@ function Navigation({ currentPage, onNavigate }) {
 function FeedPage({ onNavigate, onPostCreated }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchPosts();
@@ -29,9 +30,20 @@ function FeedPage({ onNavigate, onPostCreated }) {
     try {
       const response = await fetch(`${API_URL}/posts`);
       const data = await response.json();
-      setPosts(data);
+      console.log('Posts response:', { response, data, isArray: Array.isArray(data) });
+      
+      if (Array.isArray(data)) {
+        setPosts(data);
+        setError('');
+      } else {
+        console.error('Posts response is not an array:', data);
+        setPosts([]);
+        setError(data.error || 'Invalid response format');
+      }
     } catch (err) {
       console.error('Failed to fetch posts:', err);
+      setPosts([]);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -52,6 +64,17 @@ function FeedPage({ onNavigate, onPostCreated }) {
   if (loading) {
     return React.createElement('div', { className: 'loading' },
       React.createElement('p', null, 'Loading posts...')
+    );
+  }
+
+  if (error) {
+    return React.createElement('main', null,
+      React.createElement('div', { className: 'empty-state', style: { color: '#dc2626' } },
+        React.createElement('p', null, 'Error: ' + error),
+        React.createElement('p', { style: { fontSize: '0.9rem', marginTop: '1rem' } }, 
+          'Please check the browser console for details.'
+        )
+      )
     );
   }
 
@@ -105,6 +128,7 @@ function FeedPage({ onNavigate, onPostCreated }) {
 function PostPage({ postId, onNavigate }) {
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchPost();
@@ -116,8 +140,10 @@ function PostPage({ postId, onNavigate }) {
       if (!response.ok) throw new Error('Post not found');
       const data = await response.json();
       setPost(data);
+      setError('');
     } catch (err) {
       console.error('Failed to fetch post:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -143,10 +169,10 @@ function PostPage({ postId, onNavigate }) {
     );
   }
 
-  if (!post) {
+  if (error || !post) {
     return React.createElement('main', null,
       React.createElement('div', { style: { textAlign: 'center' } },
-        React.createElement('p', { style: { color: '#dc2626' } }, 'Post not found'),
+        React.createElement('p', { style: { color: '#dc2626' } }, 'Error: ' + (error || 'Post not found')),
         React.createElement('button', {
           onClick: () => onNavigate('feed'),
           className: 'back-link'
@@ -216,12 +242,16 @@ function CreatePostPage({ onNavigate, onPostCreated }) {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to create post');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to create post');
+      }
 
       const newPost = await response.json();
       onPostCreated(newPost);
       onNavigate('feed');
     } catch (err) {
+      console.error('Post creation error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
